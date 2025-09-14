@@ -95,11 +95,11 @@ const fragmentShader = `
     vec2 pix = 1.0 / uResolution.xy;
     float blurSize = radius * 0.5; // Scale down for subtlety
 
-    // Simple 3x3 box blur with conditional UV clamping
+    // Simple 3x3 box blur - let texture repeat naturally
     for(float x = -1.0; x <= 1.0; x += 1.0) {
       for(float y = -1.0; y <= 1.0; y += 1.0) {
         vec2 offset = vec2(x, y) * pix * blurSize;
-        vec2 sampleUv = uUseTransparentEdges ? clamp(uv + offset, 0.0, 1.0) : (uv + offset);
+        vec2 sampleUv = uv + offset;
         col += texture2D(samp, sampleUv).rgb;
       }
     }
@@ -116,7 +116,7 @@ const fragmentShader = `
     vec2 radiusPixels = radius * pix;
 
     if (samples <= 0.0 || radius <= 0.0) {
-        return texture2D(samp, uUseTransparentEdges ? clamp(uv, 0.0, 1.0) : uv).rgb;
+        return texture2D(samp, uv).rgb;
     }
 
     // Reduced max iterations for performance
@@ -125,7 +125,7 @@ const fragmentShader = `
 
         float d = i / samples;
         vec2 p = vec2(sin(ang * i), cos(ang * i)) * sqrt(d) * radiusPixels;
-        vec2 sampleUv = uUseTransparentEdges ? clamp(uv + p, 0.0, 1.0) : (uv + p);
+        vec2 sampleUv = uv + p;
         col += texture2D(samp, sampleUv).rgb;
     }
     return col / samples;
@@ -160,20 +160,19 @@ const fragmentShader = `
 
     // Animate the twist strength over time
     float dynamicStrength = uTwistStrength * (1.0 + sin(uTime * 0.16 + uLayerOffset) * 0.3);
-    // Apply the twist distortion to the UV coordinates
-    vec2 twistedUv = twist(vUv, twistCenter, uTwistRadius, dynamicStrength);
+    // Scale down texture coordinates first when using transparent edges
+    vec2 scaledUv = uUseTransparentEdges ? vUv * 1.5 : vUv;
 
-    // Scale up texture coordinates to show less of the image (zoomed in)
-    vec2 scaledUv = (twistedUv - 0.5) * 1.4 + 0.5;
+    // Apply the twist distortion to the scaled UV coordinates
+    vec2 finalUv = twist(scaledUv, twistCenter, uTwistRadius, dynamicStrength);
 
-    // Choose UV coordinates based on mode
-    vec2 finalUv = uUseTransparentEdges ? scaledUv : twistedUv;
+
 
     // Early return optimization: skip blur entirely if no blur is needed
     vec3 blurredColor;
     if (uBlurRadius <= 0.0 || uSamples <= 0.0) {
-      // No blur needed - use direct texture lookup with clamped UV
-      blurredColor = texture2D(uTexture, uUseTransparentEdges ? clamp(finalUv, 0.0, 1.0) : finalUv).rgb;
+      // No blur needed - use direct texture lookup
+      blurredColor = texture2D(uTexture, finalUv).rgb;
     } else {
       // Apply stacked blur based on layer
       if (uLayerIndex >= 2.0) {
@@ -185,14 +184,14 @@ const fragmentShader = `
         blurredColor = boxBlur(uTexture, finalUv, boxBlurRadius);
       } else {
         // No blur
-        blurredColor = texture2D(uTexture, uUseTransparentEdges ? clamp(finalUv, 0.0, 1.0) : finalUv).rgb;
+        blurredColor = texture2D(uTexture, finalUv).rgb;
       }
     }
 
     vec3 finalColorRgb = blurredColor;
 
     // Create fluid color gradients based on position and twist
-    vec2 gradientUv = vUv + sin(twistedUv * 3.14159 + uTime * 0.5) * 0.1;
+    vec2 gradientUv = vUv + sin(finalUv * 3.14159 + uTime * 0.5) * 0.1;
     float gradient = smoothstep(0.0, 1.0, gradientUv.x + gradientUv.y * 0.5);
 
     // Blend between base color and tint for fluid effect
@@ -206,17 +205,15 @@ const fragmentShader = `
     // Apply saturation boost instead of color shifting
     fluidColor = clampSaturation(fluidColor, 0.2, 1.4); // Adaptive saturation compression
 
-    // Check if scaled UV is outside 0-1 range for transparency
-    vec2 clampedUv = clamp(finalUv, 0.0, 1.0);
-    float uvAlpha = uUseTransparentEdges ?
-      ((finalUv.x >= 0.0 && finalUv.x <= 1.0 && finalUv.y >= 0.0 && finalUv.y <= 1.0) ? 1.0 : 0.0) :
-      1.0;
+    // Handle transparency based on mode
+    float finalAlpha = uOpacity;
+    if (uUseTransparentEdges) {
+      // Check if twisted UV is outside 0-1 range for transparency
+      float uvAlpha = (finalUv.x >= 0.0 && finalUv.x <= 1.0 && finalUv.y >= 0.0 && finalUv.y <= 1.0) ? 1.0 : 0.0;
+      finalAlpha = uOpacity * uvAlpha;
+    }
 
-    // Use the alpha from texture combined with UV bounds check
-    vec4 texColorAlpha = texture2D(uTexture, clampedUv, 0.0);
-    float finalAlpha = uOpacity * uvAlpha;
-
-    // Set the final fragment color with enhanced saturation and proper transparency
+    // Set the final fragment color
     gl_FragColor = vec4(fluidColor, finalAlpha);
 
   }
@@ -598,8 +595,7 @@ const gaussianBlurFragmentShader = `
 
   void main() {
     vec3 col = vec3(0.0);
-    vec2 pix = 8.0 / uResolution;
-    float blurSize = uBlurRadius * 0.01;
+    vec2 pix = uBlurRadius / uResolution;
 
     // Gaussian kernel weights (5x5)
     float weights[81];
@@ -977,7 +973,7 @@ export default function MeshArtBackground({
   imageUrlDark = "/gradient-dark.png",
   blurRadius = 30, // Layer blur radius
   samples = 25, // Layer samples
-  boxBlurRadius = 4, // Post-processing gaussian blur
+  boxBlurRadius = 5, // Post-processing gaussian blur
   bokehSamples = 50, // Post-processing bokeh samples
   enableNavigationTransition = true,
   transitionDuration = 800, // ms
