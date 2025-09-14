@@ -21,17 +21,22 @@ function FullscreenPage() {
   const { handle, pds, repo } = useSearch({ from: "/fullscreen" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolvedPds, setResolvedPds] = useState<string>("");
+  const [resolvedRepo, setResolvedRepo] = useState<string>("");
 
   useEffect(() => {
-    // If we already have pds and repo, we're good to go
+    // If we already have pds and repo from URL params, use them
     if (pds && repo) {
+      setResolvedPds(pds);
+      setResolvedRepo(repo);
       return;
     }
 
-    // If we have a handle but no pds/repo, resolve and redirect
-    if (handle && !pds && !repo) {
-      const resolveAndRedirect = async () => {
+    // If we have a non-blank handle but no pds/repo, resolve it
+    if (handle && handle != "" && !pds && !repo) {
+      const resolveHandleAsync = async () => {
         setLoading(true);
+        setError(null);
         try {
           if (!isValidHandle(handle)) {
             throw new Error("Invalid handle format");
@@ -39,7 +44,11 @@ function FullscreenPage() {
 
           const resolution = await resolveHandle(handle);
 
-          // Redirect to the same route but with resolved pds/repo instead of handle
+          // Store resolved values in state for immediate rendering
+          setResolvedPds(resolution.pdsUrl);
+          setResolvedRepo(resolution.did);
+
+          // Also update the URL with resolved values for shareability
           navigate({
             to: "/fullscreen",
             search: {
@@ -53,20 +62,20 @@ function FullscreenPage() {
           setError(
             err instanceof Error ? err.message : "Failed to resolve handle",
           );
+        } finally {
           setLoading(false);
         }
       };
 
-      resolveAndRedirect();
+      resolveHandleAsync();
       return;
     }
 
     // If we have neither handle nor pds/repo, show error
     if (!handle && !pds && !repo) {
       setError("No handle, PDS, or repo provided");
-      setLoading(false);
     }
-  }, [handle, pds, repo, navigate]);
+  }, [handle, pds, repo]);
 
   if (loading) {
     return (
@@ -79,7 +88,7 @@ function FullscreenPage() {
     );
   }
 
-  if (error || !pds || !repo) {
+  if (error || !resolvedPds || !resolvedRepo) {
     return (
       <div className="flex h-screen w-screen items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-center max-w-md">
@@ -98,5 +107,5 @@ function FullscreenPage() {
     );
   }
 
-  return <TealFMFullscreen pdsAddress={pds} repo={repo} />;
+  return <TealFMFullscreen pdsAddress={resolvedPds} repo={resolvedRepo} />;
 }
