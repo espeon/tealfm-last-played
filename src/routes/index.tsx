@@ -96,12 +96,6 @@ function App() {
     navigator.clipboard.writeText(code);
   };
 
-  if (resolved && record) {
-    return (
-      <TealFMFullscreen pdsAddress={resolved.pdsUrl} repo={resolved.did} />
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50 flex items-center justify-center p-8">
       <div className="max-w-md w-full">
