@@ -110,12 +110,12 @@ const fragmentShader = `
   void main() {
     // Calculate the center of the twist effect, animating it over time
     vec2 twistCenter = uTwistCenter + vec2(
-      sin(uTime * 0.5 + uLayerOffset) * 0.1,
-      cos(uTime * 0.3 + uLayerOffset) * 0.1
+      sin(uTime * 0.1 + uLayerOffset) * 0.1,
+      cos(uTime * 0.06 + uLayerOffset) * 0.1
     );
 
     // Animate the twist strength over time
-    float dynamicStrength = uTwistStrength * (1.0 + sin(uTime * 0.8 + uLayerOffset) * 0.3);
+    float dynamicStrength = uTwistStrength * (1.0 + sin(uTime * 0.16 + uLayerOffset) * 0.3);
     // Apply the twist distortion to the UV coordinates
     vec2 twistedUv = twist(vUv, twistCenter, uTwistRadius, dynamicStrength);
 
@@ -199,7 +199,7 @@ function TwistedLayer({
       uLayerOffset: { value: layerIndex * Math.PI * 0.5 },
       uTint: { value: new THREE.Vector3(0.4, 0.4, 0.4) },
       uOpacity: { value: opacity },
-      uRotationSpeed: { value: (layerIndex + 1) * 0.05 }, // Much slower, subtle rotation
+      uRotationSpeed: { value: (layerIndex + 1) * 0.01 }, // Much slower, subtle rotation
       // Blur uniforms - stacked system
       uResolution: { value: resolution || new THREE.Vector2(1, 1) },
       uBlurRadius: { value: layerIndex === 0 ? blurRadius || 0 : 0 },
@@ -241,14 +241,15 @@ function TwistedLayer({
 
       // More fluid, warping twist - like melting forms
       const baseStrength =
-        2.0 + Math.sin(state.clock.elapsedTime * 0.2 + layerIndex * 0.2) * 0.8;
+        2.0 + Math.sin(state.clock.elapsedTime * 0.04 + layerIndex * 0.2) * 0.8;
       materialRef.current.uniforms.uTwistStrength.value = baseStrength;
 
       // Gentle, flowing twist center movement - like melting
       const centerX =
-        0.5 + Math.sin(state.clock.elapsedTime * 0.1 + layerIndex * 0.3) * 0.1;
+        0.5 + Math.sin(state.clock.elapsedTime * 0.02 + layerIndex * 0.3) * 0.1;
       const centerY =
-        0.5 + Math.cos(state.clock.elapsedTime * 0.08 + layerIndex * 0.4) * 0.1;
+        0.5 +
+        Math.cos(state.clock.elapsedTime * 0.016 + layerIndex * 0.4) * 0.1;
       materialRef.current.uniforms.uTwistCenter.value.set(centerX, centerY);
     }
 
@@ -258,7 +259,7 @@ function TwistedLayer({
       const isBackground = layerIndex === totalLayers - 1;
 
       if (isBackground) {
-        const speed = (layerIndex + 1) * 0.2;
+        const speed = (layerIndex + 1) * 0.04;
         const orbitRadius = layerIndex * 3.5;
         const verticalOffset = Math.sin(time * speed * 0.7);
 
@@ -268,13 +269,13 @@ function TwistedLayer({
           Math.sin(time * speed) * orbitRadius * 0.6 + verticalOffset;
         meshRef.current.position.z = -layerIndex * 0.02;
 
-        const breathe = 1.0 + Math.sin(time * 0.1) * 0.02;
+        const breathe = 1.0 + Math.sin(time * 0.02) * 0.02;
         meshRef.current.scale.setScalar(15 * breathe);
         meshRef.current.position.set(0, 0, -layerIndex * 0.02);
-        meshRef.current.rotation.z = time * speed * 0.02;
+        meshRef.current.rotation.z = time * speed * 0.004;
       } else {
         // Moving layers: orbit around with different speeds and paths
-        const speed = (layerIndex + 1) * 0.03;
+        const speed = (layerIndex + 1) * 0.006;
         const orbitRadius = layerIndex - 0.1 * 3.5;
         const verticalOffset = Math.sin(time * speed * 0.7) * 0.2;
 
@@ -290,7 +291,7 @@ function TwistedLayer({
         meshRef.current.scale.setScalar(baseScale * breathe);
 
         // Rotation for flow effect
-        meshRef.current.rotation.z = time * speed * 0.2;
+        meshRef.current.rotation.z = time * speed * 0.04;
       }
     }
   });

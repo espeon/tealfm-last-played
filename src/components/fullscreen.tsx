@@ -173,7 +173,7 @@ export function TealFMFullscreen({
         <MeshArtBackground
           imageUrl={albumArt || undefined}
           enableNavigationTransition={true}
-          backgroundOpacity={albumArt ? 0.8 : 0.0}
+          backgroundOpacity={albumArt ? 0.6 : 0.0}
         />
       )}
 

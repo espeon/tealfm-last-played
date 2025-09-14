@@ -204,10 +204,6 @@ function App() {
             </div>
           )}
         </div>
-
-        <div className="text-center mt-6 text-sm text-gray-500 dark:text-gray-400">
-          connect your music streaming service to see what's currently playing
-        </div>
       </div>
     </div>
   );
