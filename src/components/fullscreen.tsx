@@ -231,7 +231,7 @@ export function TealFMFullscreen({
         </div>
       ) : (
         /* Normal fullscreen mode */
-        <div className="flex max-w-6xl flex-col items-center justify-center gap-8 p-8 text-center">
+        <div className="flex max-w-6xl flex-col items-center justify-center gap-8 text-center">
           {data && data.value && (
             <div className="flex w-full flex-1 min-w-xs max-w-xs md:min-w-2xl md:max-w-2xl flex-col gap-6 rounded-2xl bg-neutral-100/50 p-4 dark:bg-neutral-800/50 border-2 border-gray-500/20 md:flex-row md:gap-8">
               {/* Album Art */}
@@ -264,7 +264,7 @@ export function TealFMFullscreen({
               </div>
 
               {/* Track Info */}
-              <div className="flex flex-1 flex-col gap-4 md:gap-0 text-left min-w-0 justify-around items-start pr-4">
+              <div className="flex flex-1 flex-col gap-4 md:gap-0 text-left min-w-0 justify-around items-start lg:pr-4">
                 <p className="text-sm text-neutral-600 dark:text-neutral-400 font-mono">
                   Last Played
                 </p>
