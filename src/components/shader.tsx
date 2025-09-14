@@ -61,6 +61,7 @@ const fragmentShader = `
   uniform float uLayerOffset;
   uniform vec3 uTint;
   uniform float uOpacity;
+  uniform bool uUseTransparentEdges; // Flag to control repeat vs transparent behavior
 
   uniform float uBlurRadius;
   uniform float uSamples;
@@ -94,11 +95,12 @@ const fragmentShader = `
     vec2 pix = 1.0 / uResolution.xy;
     float blurSize = radius * 0.5; // Scale down for subtlety
 
-    // Simple 3x3 box blur
+    // Simple 3x3 box blur with conditional UV clamping
     for(float x = -1.0; x <= 1.0; x += 1.0) {
       for(float y = -1.0; y <= 1.0; y += 1.0) {
         vec2 offset = vec2(x, y) * pix * blurSize;
-        col += texture2D(samp, uv + offset).rgb;
+        vec2 sampleUv = uUseTransparentEdges ? clamp(uv + offset, 0.0, 1.0) : (uv + offset);
+        col += texture2D(samp, sampleUv).rgb;
       }
     }
     return col / 9.0; // Average of 9 samples
@@ -114,7 +116,7 @@ const fragmentShader = `
     vec2 radiusPixels = radius * pix;
 
     if (samples <= 0.0 || radius <= 0.0) {
-        return texture2D(samp, uv).rgb;
+        return texture2D(samp, uUseTransparentEdges ? clamp(uv, 0.0, 1.0) : uv).rgb;
     }
 
     // Reduced max iterations for performance
@@ -123,7 +125,8 @@ const fragmentShader = `
 
         float d = i / samples;
         vec2 p = vec2(sin(ang * i), cos(ang * i)) * sqrt(d) * radiusPixels;
-        col += texture2D(samp, uv + p).rgb;
+        vec2 sampleUv = uUseTransparentEdges ? clamp(uv + p, 0.0, 1.0) : (uv + p);
+        col += texture2D(samp, sampleUv).rgb;
     }
     return col / samples;
   }
@@ -160,23 +163,29 @@ const fragmentShader = `
     // Apply the twist distortion to the UV coordinates
     vec2 twistedUv = twist(vUv, twistCenter, uTwistRadius, dynamicStrength);
 
+    // Scale up texture coordinates to show less of the image (zoomed in)
+    vec2 scaledUv = (twistedUv - 0.5) * 1.4 + 0.5;
+
+    // Choose UV coordinates based on mode
+    vec2 finalUv = uUseTransparentEdges ? scaledUv : twistedUv;
+
     // Early return optimization: skip blur entirely if no blur is needed
     vec3 blurredColor;
     if (uBlurRadius <= 0.0 || uSamples <= 0.0) {
-      // No blur needed - use direct texture lookup
-      blurredColor = texture2D(uTexture, twistedUv).rgb;
+      // No blur needed - use direct texture lookup with clamped UV
+      blurredColor = texture2D(uTexture, uUseTransparentEdges ? clamp(finalUv, 0.0, 1.0) : finalUv).rgb;
     } else {
       // Apply stacked blur based on layer
       if (uLayerIndex >= 2.0) {
         // Final layer: use bokeh blur
-        blurredColor = bokeh(uTexture, twistedUv, uBlurRadius, uSamples);
+        blurredColor = bokeh(uTexture, finalUv, uBlurRadius, uSamples);
       } else if (uLayerIndex >= 0.0) {
         // First two layers: use fast box blur
         float boxBlurRadius = uBlurRadius * (uLayerIndex + 1.0) * 0.3; // Progressive blur
-        blurredColor = boxBlur(uTexture, twistedUv, boxBlurRadius);
+        blurredColor = boxBlur(uTexture, finalUv, boxBlurRadius);
       } else {
         // No blur
-        blurredColor = texture2D(uTexture, twistedUv).rgb;
+        blurredColor = texture2D(uTexture, uUseTransparentEdges ? clamp(finalUv, 0.0, 1.0) : finalUv).rgb;
       }
     }
 
@@ -189,19 +198,27 @@ const fragmentShader = `
     // Blend between base color and tint for fluid effect
     vec3 fluidColor = mix(finalColorRgb, finalColorRgb * uTint * 1.3, gradient);
 
-    vec3 warmShift = vec3(1.1, 1.0, 0.9); // Warm tones
-    vec3 coolShift = vec3(0.9, 1.0, 1.1); // Cool tones
-    float colorShift = sin(uTime * 0.03 + uLayerOffset) * 0.5 + 0.5;
-    fluidColor *= mix(coolShift, warmShift, colorShift);
+    // vec3 warmShift = vec3(1.1, 1.0, 0.9); // Warm tones
+    // vec3 coolShift = vec3(0.9, 1.0, 1.1); // Cool tones
+    // float colorShift = sin(uTime * 0.03 + uLayerOffset) * 0.5 + 0.5;
+    // fluidColor *= mix(coolShift, warmShift, colorShift);
 
     // Apply saturation boost instead of color shifting
     fluidColor = clampSaturation(fluidColor, 0.2, 1.4); // Adaptive saturation compression
 
-    // Use the alpha from a standard texture lookup at the twisted UV for transparency
-    vec4 texColorAlpha = texture2D(uTexture, twistedUv, 0.0); // Use LOD 0
+    // Check if scaled UV is outside 0-1 range for transparency
+    vec2 clampedUv = clamp(finalUv, 0.0, 1.0);
+    float uvAlpha = uUseTransparentEdges ?
+      ((finalUv.x >= 0.0 && finalUv.x <= 1.0 && finalUv.y >= 0.0 && finalUv.y <= 1.0) ? 1.0 : 0.0) :
+      1.0;
 
-    // Set the final fragment color with enhanced saturation
-    gl_FragColor = vec4(fluidColor, texColorAlpha.a * uOpacity);
+    // Use the alpha from texture combined with UV bounds check
+    vec4 texColorAlpha = texture2D(uTexture, clampedUv, 0.0);
+    float finalAlpha = uOpacity * uvAlpha;
+
+    // Set the final fragment color with enhanced saturation and proper transparency
+    gl_FragColor = vec4(fluidColor, finalAlpha);
+
   }
 `;
 
@@ -244,12 +261,13 @@ function TwistedLayer({
       uTwistCenter: {
         value: new THREE.Vector2(layerIndex * 0.5, layerIndex * 0.5),
       },
-      uTwistRadius: { value: 1.2 },
-      uTwistStrength: { value: 2.5 },
+      uTwistRadius: { value: 0.9 },
+      uTwistStrength: { value: 9.5 },
       uLayerOffset: { value: layerIndex * Math.PI * 0.7 },
-      uTint: { value: new THREE.Vector3(0.4, 0.4, 0.45) },
+      uTint: { value: new THREE.Vector3(0.4, 0.4, 0.4) },
       uOpacity: { value: opacity },
       uRotationSpeed: { value: (layerIndex + 1) * 0.01 }, // Much slower, subtle rotation
+      uUseTransparentEdges: { value: layerIndex !== totalLayers - 1 }, // Transparent for moving layers, repeat for background
       // Blur uniforms - stacked system
       uResolution: { value: resolution || new THREE.Vector2(1, 1) },
       uBlurRadius: { value: layerIndex === 0 ? blurRadius || 0 : 0 },
@@ -355,7 +373,7 @@ function TwistedLayer({
         const breathePhase = (time * breatheSpeed + layerPhase) % (Math.PI * 2);
         const breatheEase = easeInOutSine(Math.sin(breathePhase) * 0.5 + 0.5);
         const breathe = 1.0 + breatheEase * 0.08;
-        const baseScale = (layerIndex + 1) * 1.8;
+        const baseScale = layerIndex * 2.3;
         meshRef.current.scale.setScalar(baseScale * breathe);
 
         // Harmonized rotation - layers rotate at related speeds with easing
@@ -368,11 +386,11 @@ function TwistedLayer({
 
   // Different behavior for background vs moving layers
   const isBackground = layerIndex === numLayers - 1; // Last layer is background
-  const layerScale = isBackground ? 15 : (layerIndex + 5) * 30; // Big background, small moving layers
+  const layerScale = isBackground ? 15 : layerIndex + 5; // Big background, small moving layers
 
   return (
     <mesh ref={meshRef} position={[0, 0, -layerIndex]} scale={layerScale}>
-      <planeGeometry args={isBackground ? [1, 1, 32, 32] : [1, 1, 16, 16]} />
+      <planeGeometry args={isBackground ? [2, 2, 32, 32] : [2, 2, 16, 16]} />
       <shaderMaterial
         ref={materialRef}
         vertexShader={vertexShader}
@@ -580,7 +598,7 @@ const gaussianBlurFragmentShader = `
 
   void main() {
     vec3 col = vec3(0.0);
-    vec2 pix = 4.0 / uResolution;
+    vec2 pix = 8.0 / uResolution;
     float blurSize = uBlurRadius * 0.01;
 
     // Gaussian kernel weights (5x5)

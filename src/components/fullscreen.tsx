@@ -4,6 +4,7 @@ import { ScrollingText } from "./scrolling-text";
 import { useAtprotoRecords } from "../hooks/useAtprotoRecords";
 import { isInIframe } from "@/lib/embed";
 import ShaderWithDebug from "./ShaderWithDebug";
+import { metadataCleaner } from "@/lib/clean";
 
 function useQueryParam(param: string): string | undefined {
   if (typeof window === "undefined") return undefined;
@@ -33,7 +34,11 @@ async function fetchAlbumArt(
   // Fallback to MusicBrainz search + Cover Art Archive
   if (artistName && releaseName) {
     try {
-      const searchQuery = `artist:"${artistName}" AND release:"${releaseName}"`;
+      // Clean the metadata before searching
+      const cleanedArtist = metadataCleaner.cleanArtist(artistName).text;
+      const cleanedRelease = metadataCleaner.cleanRecording(releaseName).text;
+
+      const searchQuery = `artist:"${cleanedArtist.split(",")}" AND release:"${cleanedRelease}"`;
       const mbResponse = await fetch(
         `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(searchQuery)}&fmt=json&limit=1`,
       );
@@ -58,9 +63,13 @@ async function fetchAlbumArt(
   // Last.fm fallback
   if (artistName && releaseName) {
     try {
+      // Clean the metadata before searching
+      const cleanedArtist = metadataCleaner.cleanArtist(artistName).text;
+      const cleanedRelease = metadataCleaner.cleanRecording(releaseName).text;
+
       // Note: You'll need a Last.fm API key for this to work in production
       const lastFmResponse = await fetch(
-        `https://ws.audioscrobbler.com/2.0/?method=album.getinfo&api_key=6f5ff9d828991a85bd78449a85548586&artist=${encodeURIComponent(artistName)}&album=${encodeURIComponent(releaseName)}&format=json`,
+        `https://ws.audioscrobbler.com/2.0/?method=album.getinfo&api_key=6f5ff9d828991a85bd78449a85548586&artist=${encodeURIComponent(cleanedArtist)}&album=${encodeURIComponent(cleanedRelease)}&format=json`,
       );
 
       if (lastFmResponse.ok) {
