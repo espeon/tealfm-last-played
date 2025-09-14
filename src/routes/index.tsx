@@ -97,13 +97,13 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50 flex items-center justify-center p-8">
+    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-8">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-teal-900 mb-4">
+          <h1 className="text-3xl font-bold text-teal-900 dark:text-teal-100 mb-4">
             teal.fm now playing
           </h1>
-          <p className="text-lg text-gray-700 mb-6">
+          <p className="text-lg text-gray-700 dark:text-gray-300 mb-6">
             if you have teal.fm records, you can see your last played track in
             an embed.
           </p>
@@ -113,7 +113,7 @@ function App() {
           <div>
             <label
               htmlFor="handle"
-              className="block text-sm font-medium text-gray-700 mb-2"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
             >
               AT Protocol Handle or DID
             </label>
@@ -123,7 +123,7 @@ function App() {
               value={handle}
               onChange={(e) => setHandle(e.target.value)}
               placeholder="alice.bsky.social or did:plc:..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   if (!resolving && !resolved) {
@@ -140,7 +140,7 @@ function App() {
             <button
               onClick={handleGoFullscreen}
               disabled={!handle.trim()}
-              className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="bg-blue-600 dark:bg-blue-700 text-white py-2 px-4 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Go Fullscreen
             </button>
@@ -148,26 +148,26 @@ function App() {
             <button
               onClick={() => setShowEmbed(!showEmbed)}
               disabled={!handle.trim()}
-              className="bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="bg-gray-600 dark:bg-gray-700 text-white py-2 px-4 rounded-lg hover:bg-gray-700 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Get Embed
             </button>
           </div>
 
           {showEmbed && handle.trim() && (
-            <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-              <div className="text-sm font-medium text-gray-700">
+            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg space-y-3">
+              <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Embed Code:
               </div>
               <textarea
                 readOnly
                 value={generateEmbedCode()}
-                className="w-full h-20 text-xs bg-white border border-gray-300 rounded p-2 font-mono"
+                className="w-full h-20 text-xs bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded p-2 font-mono"
                 onClick={(e) => e.currentTarget.select()}
               />
               <button
                 onClick={copyEmbedCode}
-                className="text-sm bg-teal-600 text-white px-3 py-1 rounded hover:bg-teal-700 transition-colors"
+                className="text-sm bg-teal-600 dark:bg-teal-700 text-white px-3 py-1 rounded hover:bg-teal-700 dark:hover:bg-teal-800 transition-colors"
               >
                 Copy to Clipboard
               </button>
@@ -175,23 +175,29 @@ function App() {
           )}
 
           {error && (
-            <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">
+            <div className="text-red-600 dark:text-red-400 text-sm bg-red-50 dark:bg-red-900/30 p-3 rounded-lg">
               {error}
             </div>
           )}
 
           {resolved && (
-            <div className="bg-green-50 p-3 rounded-lg text-sm">
-              <div className="text-green-800 font-medium mb-1">
+            <div className="bg-green-50 dark:bg-green-900/30 p-3 rounded-lg text-sm">
+              <div className="text-green-800 dark:text-green-200 font-medium mb-1">
                 Resolved successfully!
               </div>
-              <div className="text-green-600">DID: {resolved.did}</div>
-              <div className="text-green-600">PDS: {resolved.pdsUrl}</div>
+              <div className="text-green-600 dark:text-green-300">
+                DID: {resolved.did}
+              </div>
+              <div className="text-green-600 dark:text-green-300">
+                PDS: {resolved.pdsUrl}
+              </div>
               {loading && (
-                <div className="text-green-600 mt-2">Loading records...</div>
+                <div className="text-green-600 dark:text-green-300 mt-2">
+                  Loading records...
+                </div>
               )}
               {recordError && (
-                <div className="text-red-600 mt-2">
+                <div className="text-red-600 dark:text-red-400 mt-2">
                   Error loading records: {recordError.message}
                 </div>
               )}
@@ -199,7 +205,7 @@ function App() {
           )}
         </div>
 
-        <div className="text-center mt-6 text-sm text-gray-500">
+        <div className="text-center mt-6 text-sm text-gray-500 dark:text-gray-400">
           connect your music streaming service to see what's currently playing
         </div>
       </div>
