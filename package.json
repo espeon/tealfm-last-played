@@ -10,7 +10,8 @@
     "test": "vitest run",
     "format": "biome format",
     "lint": "biome lint",
-    "check": "biome check"
+    "check": "biome check",
+    "debug:shader": "node scripts/debug-shader.js"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.6",

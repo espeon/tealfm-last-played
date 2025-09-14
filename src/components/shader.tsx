@@ -1,8 +1,9 @@
 import React, { useRef, useMemo, useEffect, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, useTexture, useFBO } from "@react-three/drei";
+import { useFBO } from "@react-three/drei";
 import * as THREE from "three";
 import type { Mesh, ShaderMaterial, Texture, Vector2 } from "three";
+import "../utils/shaderDebug"; // Load debug console
 
 // Vertex shader for the twist effect with geometry rotation
 const vertexShader = `
@@ -10,6 +11,26 @@ const vertexShader = `
   uniform float uRotationSpeed;
   uniform float uLayerOffset;
   varying vec2 vUv;
+
+  // Clamp saturation function that constrains saturation to a range
+  vec3 clampSaturation(vec3 color, float minSat, float maxSat) {
+    // Calculate current saturation level
+    float maxChannel = max(max(color.r, color.g), color.b);
+    float minChannel = min(min(color.r, color.g), color.b);
+    float currentSaturation = (maxChannel - minChannel) / (maxChannel + 0.001);
+
+    // Clamp saturation to desired range
+    float targetSaturation = clamp(currentSaturation, minSat, maxSat);
+
+    // Only modify if saturation is outside the range
+    if (abs(currentSaturation - targetSaturation) < 0.001) {
+      return color; // No change needed
+    }
+
+    // Apply clamped saturation using luminance-based mixing
+    float luminance = dot(color, vec3(0.299, 0.587, 0.114));
+    return mix(vec3(luminance), color, targetSaturation / (currentSaturation + 0.001));
+  }
 
   void main() {
     vUv = uv;
@@ -107,6 +128,26 @@ const fragmentShader = `
     return col / samples;
   }
 
+  // Clamp saturation function that constrains saturation to a range
+  vec3 clampSaturation(vec3 color, float minSat, float maxSat) {
+    // Calculate current saturation level
+    float maxChannel = max(max(color.r, color.g), color.b);
+    float minChannel = min(min(color.r, color.g), color.b);
+    float currentSaturation = (maxChannel - minChannel) / (maxChannel + 0.001);
+
+    // Clamp saturation to desired range
+    float targetSaturation = clamp(currentSaturation, minSat, maxSat);
+
+    // Only modify if saturation is outside the range
+    if (abs(currentSaturation - targetSaturation) < 0.001) {
+      return color; // No change needed
+    }
+
+    // Apply clamped saturation using luminance-based mixing
+    float luminance = dot(color, vec3(0.299, 0.587, 0.114));
+    return mix(vec3(luminance), color, targetSaturation / (currentSaturation + 0.001));
+  }
+
   void main() {
     // Calculate the center of the twist effect, animating it over time
     vec2 twistCenter = uTwistCenter + vec2(
@@ -146,18 +187,20 @@ const fragmentShader = `
     float gradient = smoothstep(0.0, 1.0, gradientUv.x + gradientUv.y * 0.5);
 
     // Blend between base color and tint for fluid effect
-    vec3 fluidColor = mix(finalColorRgb, finalColorRgb * uTint * 1.5, gradient);
+    vec3 fluidColor = mix(finalColorRgb, finalColorRgb * uTint * 1.3, gradient);
 
-    // Add warm/cool color shifts like the reference
-    vec3 warmShift = vec3(1.2, 0.9, 0.7); // Warm tones
-    vec3 coolShift = vec3(0.8, 1.0, 1.3); // Cool tones
-    float colorShift = sin(uTime * 0.3 + uLayerOffset) * 0.5 + 0.5;
+    vec3 warmShift = vec3(1.1, 1.0, 0.9); // Warm tones
+    vec3 coolShift = vec3(0.9, 1.0, 1.1); // Cool tones
+    float colorShift = sin(uTime * 0.03 + uLayerOffset) * 0.5 + 0.5;
     fluidColor *= mix(coolShift, warmShift, colorShift);
+
+    // Apply saturation boost instead of color shifting
+    fluidColor = clampSaturation(fluidColor, 0.2, 1.4); // Adaptive saturation compression
 
     // Use the alpha from a standard texture lookup at the twisted UV for transparency
     vec4 texColorAlpha = texture2D(uTexture, twistedUv, 0.0); // Use LOD 0
 
-    // Set the final fragment color with fluid color blending
+    // Set the final fragment color with enhanced saturation
     gl_FragColor = vec4(fluidColor, texColorAlpha.a * uOpacity);
   }
 `;
@@ -171,6 +214,7 @@ interface TwistedLayerProps {
   samples: number;
   numLayers: number;
   opacity?: number;
+  speedMultiplier?: number;
 }
 
 function TwistedLayer({
@@ -182,22 +226,28 @@ function TwistedLayer({
   samples,
   numLayers,
   opacity = 1.0,
+  speedMultiplier = 3.0,
 }: TwistedLayerProps): React.JSX.Element {
   const meshRef = useRef<Mesh>(null);
   const materialRef = useRef<ShaderMaterial>(null);
+
+  // Smooth easing functions for natural motion
+  const easeInOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
+  const easeInOutQuad = (t: number) =>
+    t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
   // Define uniforms using useMemo for performance
   const uniforms = useMemo(
     () => ({
       uTexture: { value: texture },
-      uTime: { value: 0 },
+      uTime: { value: 0 * (Math.random() * 2000 + 1) },
       uTwistCenter: {
         value: new THREE.Vector2(layerIndex * 0.5, layerIndex * 0.5),
       },
       uTwistRadius: { value: 1.2 },
       uTwistStrength: { value: 2.5 },
-      uLayerOffset: { value: layerIndex * Math.PI * 0.5 },
-      uTint: { value: new THREE.Vector3(0.4, 0.4, 0.4) },
+      uLayerOffset: { value: layerIndex * Math.PI * 0.7 },
+      uTint: { value: new THREE.Vector3(0.4, 0.4, 0.45) },
       uOpacity: { value: opacity },
       uRotationSpeed: { value: (layerIndex + 1) * 0.01 }, // Much slower, subtle rotation
       // Blur uniforms - stacked system
@@ -237,7 +287,8 @@ function TwistedLayer({
   useFrame((state) => {
     // Update time uniform for animation
     if (materialRef.current) {
-      materialRef.current.uniforms.uTime.value = state.clock.elapsedTime;
+      materialRef.current.uniforms.uTime.value =
+        state.clock.elapsedTime * speedMultiplier;
 
       // More fluid, warping twist - like melting forms
       const baseStrength =
@@ -253,45 +304,64 @@ function TwistedLayer({
       materialRef.current.uniforms.uTwistCenter.value.set(centerX, centerY);
     }
 
-    // Different movement for background vs moving layers
+    // Unified movement system for all layers
     if (meshRef.current) {
-      const time = state.clock.elapsedTime;
+      const time = state.clock.elapsedTime * speedMultiplier;
       const isBackground = layerIndex === totalLayers - 1;
 
+      // Base timing - harmonized ratios for consistent flow
+      const baseSpeed = 0.008; // Master tempo
+      const layerPhase = (layerIndex * Math.PI * 2) / totalLayers; // Evenly distributed phases
+
       if (isBackground) {
-        const speed = (layerIndex + 1) * 0.04;
-        const orbitRadius = layerIndex * 3.5;
-        const verticalOffset = Math.sin(time * speed * 0.7);
-
-        // Orbital movement with vertical variation
-        meshRef.current.position.x = Math.cos(time * speed) * orbitRadius;
-        meshRef.current.position.y =
-          Math.sin(time * speed) * orbitRadius * 0.6 + verticalOffset;
-        meshRef.current.position.z = -layerIndex * 0.02;
-
-        const breathe = 1.0 + Math.sin(time * 0.02) * 0.02;
+        // Background layer: slow, gentle breathing with subtle position shift
+        const breathe = 1.0 + Math.sin(time * baseSpeed * 2.5) * 0.03;
         meshRef.current.scale.setScalar(15 * breathe);
-        meshRef.current.position.set(0, 0, -layerIndex * 0.02);
-        meshRef.current.rotation.z = time * speed * 0.004;
-      } else {
-        // Moving layers: orbit around with different speeds and paths
-        const speed = (layerIndex + 1) * 0.006;
-        const orbitRadius = layerIndex - 0.1 * 3.5;
-        const verticalOffset = Math.sin(time * speed * 0.7) * 0.2;
 
-        // Orbital movement with vertical variation
-        meshRef.current.position.x = Math.cos(time * speed) * orbitRadius;
-        meshRef.current.position.y =
-          Math.sin(time * speed) * orbitRadius * 0.6 + verticalOffset;
+        // Very subtle background drift
+        meshRef.current.position.x = Math.sin(time * baseSpeed * 0.5) * 0.1;
+        meshRef.current.position.y = Math.cos(time * baseSpeed * 0.3) * 0.1;
         meshRef.current.position.z = -layerIndex * 0.02;
 
-        // Dynamic scaling with breathing
-        const breathe = 1.0 + Math.sin(time * speed * 2) * 0.1;
-        const baseScale = layerIndex * 2;
+        // Minimal rotation for background
+        meshRef.current.rotation.z = time * baseSpeed * 0.1;
+      } else {
+        // Moving layers: harmonized orbital motion
+        // Use mathematical ratios for orbital periods (1x, 1.5x, 2x, 2.5x)
+        const layerSpeedMultiplier = 1 + layerIndex * 0.5;
+        const currentSpeed = baseSpeed * layerSpeedMultiplier;
+
+        // Consistent orbital radius based on layer depth
+        const orbitRadius = (layerIndex + 1) * 1.2;
+
+        // Primary orbital motion
+        const primaryX =
+          Math.cos(time * currentSpeed + layerPhase) * orbitRadius;
+        const primaryY =
+          Math.sin(time * currentSpeed + layerPhase) * orbitRadius * 0.7;
+
+        // Secondary motion for organic feel - synchronized with primary
+        const secondaryPhase = time * currentSpeed * 0.3 + layerPhase;
+        const secondaryX = Math.sin(secondaryPhase) * orbitRadius * 0.2;
+        const secondaryY = Math.cos(secondaryPhase * 1.3) * orbitRadius * 0.15;
+
+        // Combine primary and secondary motion
+        meshRef.current.position.x = primaryX + secondaryX;
+        meshRef.current.position.y = primaryY + secondaryY;
+        meshRef.current.position.z = -layerIndex * 0.02;
+
+        // Synchronized breathing - faster layers breathe slightly faster
+        const breatheSpeed = baseSpeed * (2 + layerIndex * 0.3);
+        const breathePhase = (time * breatheSpeed + layerPhase) % (Math.PI * 2);
+        const breatheEase = easeInOutSine(Math.sin(breathePhase) * 0.5 + 0.5);
+        const breathe = 1.0 + breatheEase * 0.08;
+        const baseScale = (layerIndex + 1) * 1.8;
         meshRef.current.scale.setScalar(baseScale * breathe);
 
-        // Rotation for flow effect
-        meshRef.current.rotation.z = time * speed * 0.04;
+        // Harmonized rotation - layers rotate at related speeds with easing
+        const rotationSpeed = currentSpeed * (0.8 + layerIndex * 0.1);
+        const rotationEase = easeInOutQuad((time * rotationSpeed * 0.1) % 1);
+        meshRef.current.rotation.z = time * rotationSpeed + rotationEase * 0.1;
       }
     }
   });
@@ -323,6 +393,12 @@ interface AlbumArtVisualizerProps {
   samples: number;
   onTextureLoad?: () => void;
   removeBlur?: boolean;
+  // Debug props
+  debugMode?: boolean;
+  showOnlyForeground?: boolean;
+  showOnlyBackground?: boolean;
+  debugLayerCount?: number;
+  speedMultiplier?: number;
 }
 
 function AlbumArtVisualizer({
@@ -333,6 +409,12 @@ function AlbumArtVisualizer({
   samples,
   onTextureLoad,
   removeBlur = false,
+  // Debug props
+  debugMode = false,
+  showOnlyForeground = false,
+  showOnlyBackground = false,
+  debugLayerCount,
+  speedMultiplier = 3.0,
 }: AlbumArtVisualizerProps): React.JSX.Element {
   const [loadedTexture, setLoadedTexture] = useState<Texture>(fallbackTexture);
   const [isLoading, setIsLoading] = useState(false);
@@ -433,13 +515,34 @@ function AlbumArtVisualizer({
     };
   }, []);
 
-  const numLayers = 5; // 1 large background + 4 smaller moving layers
+  const numLayers = debugLayerCount || 5; // 1 large background + 4 smaller moving layers
   const renderLayers = isLoading ? 1 : numLayers; // Reduce layers during loading
+
+  // Filter layers based on debug mode
+  const getVisibleLayers = () => {
+    const layers = Array.from({ length: renderLayers }, (_, i) => i);
+
+    if (!debugMode) return layers;
+
+    if (showOnlyBackground) {
+      // Only show the last layer (background)
+      return layers.filter((i) => i === numLayers - 1);
+    }
+
+    if (showOnlyForeground) {
+      // Only show non-background layers
+      return layers.filter((i) => i !== numLayers - 1);
+    }
+
+    return layers;
+  };
+
+  const visibleLayers = getVisibleLayers();
 
   return (
     <group>
       {/* Render layers - fewer during loading for better performance */}
-      {Array.from({ length: renderLayers }, (_, i) => (
+      {visibleLayers.map((i) => (
         <TwistedLayer
           key={`layer-${i}-${imageUrl || "default"}`}
           texture={loadedTexture}
@@ -453,6 +556,7 @@ function AlbumArtVisualizer({
             removeBlur ? 0 : isLoading ? Math.max(5, samples * 0.2) : samples
           }
           numLayers={numLayers}
+          speedMultiplier={speedMultiplier}
         />
       ))}
     </group>
@@ -764,6 +868,12 @@ interface SceneProps {
   bokehSamples: number;
   onTextureLoad?: () => void;
   removeBlur?: boolean;
+  // Debug props
+  debugMode?: boolean;
+  showOnlyForeground?: boolean;
+  showOnlyBackground?: boolean;
+  debugLayerCount?: number;
+  speedMultiplier?: number;
 }
 
 function Scene({
@@ -775,6 +885,12 @@ function Scene({
   bokehSamples,
   onTextureLoad,
   removeBlur = false,
+  // Debug props
+  debugMode = false,
+  showOnlyForeground = false,
+  showOnlyBackground = false,
+  debugLayerCount,
+  speedMultiplier = 3.0,
 }: SceneProps): React.JSX.Element {
   // Get camera and canvas size from useThree hook
   const { camera, size } = useThree();
@@ -792,9 +908,6 @@ function Scene({
 
   return (
     <>
-      {/* Add ambient light to see the mesh */}
-      <ambientLight intensity={0.1} />
-      {/* Render the visualizer with current props */}
       <AlbumArtVisualizer
         imageUrl={imageUrl}
         fallbackTexture={fallbackTexture}
@@ -803,6 +916,11 @@ function Scene({
         samples={removeBlur ? 0 : samples}
         onTextureLoad={onTextureLoad}
         removeBlur={removeBlur}
+        debugMode={debugMode}
+        showOnlyForeground={showOnlyForeground}
+        showOnlyBackground={showOnlyBackground}
+        debugLayerCount={debugLayerCount}
+        speedMultiplier={speedMultiplier}
       />
       {!removeBlur && (
         <PostProcessing blurRadius={boxBlurRadius} samples={bokehSamples} />
@@ -827,6 +945,12 @@ interface MeshArtBackgroundProps {
   onLoadingStateChange?: (isLoading: boolean) => void;
   sceneManager?: any; // BackgroundSceneManager instance
   containerRef?: React.RefObject<HTMLDivElement>;
+  // Debug props
+  debugMode?: boolean;
+  showOnlyForeground?: boolean;
+  showOnlyBackground?: boolean;
+  debugLayerCount?: number;
+  speedMultiplier?: number;
 }
 
 export default function MeshArtBackground({
@@ -839,10 +963,16 @@ export default function MeshArtBackground({
   bokehSamples = 50, // Post-processing bokeh samples
   enableNavigationTransition = true,
   transitionDuration = 800, // ms
-  backgroundOpacity = 0.25, // Background transparency
+  backgroundOpacity = 0.15, // Background transparency
   removeBlur = false,
   noFadeIn = false,
   onLoadingStateChange,
+  // Debug props
+  debugMode = false,
+  showOnlyForeground = false,
+  showOnlyBackground = false,
+  debugLayerCount,
+  speedMultiplier = 3.0,
 }: MeshArtBackgroundProps): React.JSX.Element {
   // State for texture loading (still needed for fade-in)
   const [isTextureLoaded, setIsTextureLoaded] = useState(noFadeIn || false);
@@ -1041,6 +1171,11 @@ export default function MeshArtBackground({
             onLoadingStateChange?.(false);
           }}
           removeBlur={removeBlur}
+          debugMode={debugMode}
+          showOnlyForeground={showOnlyForeground}
+          showOnlyBackground={showOnlyBackground}
+          debugLayerCount={debugLayerCount}
+          speedMultiplier={speedMultiplier}
         />
       </Canvas>
     </div>

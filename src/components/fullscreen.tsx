@@ -2,8 +2,8 @@
 import { useState, useEffect } from "react";
 import { ScrollingText } from "./scrolling-text";
 import { useAtprotoRecords } from "../hooks/useAtprotoRecords";
-import MeshArtBackground from "./shader";
-import { isInIframe, shouldUseCompactMode } from "@/lib/embed";
+import { isInIframe } from "@/lib/embed";
+import ShaderWithDebug from "./ShaderWithDebug";
 
 function useQueryParam(param: string): string | undefined {
   if (typeof window === "undefined") return undefined;
@@ -122,7 +122,6 @@ export function TealFMFullscreen({
   const hideParam = Boolean(useQueryParam("hide"));
   const embedParam = Boolean(useQueryParam("embed"));
   const isEmbed = isInIframe() || embedParam;
-  const useCompactMode = shouldUseCompactMode();
 
   const { data, loading, error } = useAtprotoRecords(
     pdsAddress,
@@ -170,10 +169,10 @@ export function TealFMFullscreen({
     <div className="flex h-screen w-screen items-center justify-center">
       {/* Hide shader in embed mode */}
       {!isEmbed && (
-        <MeshArtBackground
+        <ShaderWithDebug
           imageUrl={albumArt || undefined}
           enableNavigationTransition={true}
-          backgroundOpacity={albumArt ? 0.6 : 0.0}
+          backgroundOpacity={albumArt ? 1 : 0.0}
         />
       )}
 
