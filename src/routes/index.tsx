@@ -83,12 +83,12 @@ function App() {
     // If we have resolved data, use pds/repo params for better performance
     if (resolved) {
       const embedUrl = `${window.location.origin}/fullscreen?pds=${encodeURIComponent(resolved.pdsUrl)}&repo=${encodeURIComponent(resolved.did)}&embed=true`;
-      return `<iframe src="${embedUrl}" width="800" height="600" frameborder="0" allowfullscreen></iframe>`;
+      return `<iframe src="${embedUrl}" width="600" height="300" frameborder="0" allowfullscreen></iframe>`;
     }
 
     // Fallback to handle param if not yet resolved
     const embedUrl = `${window.location.origin}/fullscreen?handle=${encodeURIComponent(handle)}&embed=true`;
-    return `<iframe src="${embedUrl}" width="800" height="600" frameborder="0" allowfullscreen></iframe>`;
+    return `<iframe src="${embedUrl}" width="600" height="300" frameborder="0" allowfullscreen></iframe>`;
   };
 
   const copyEmbedCode = () => {
