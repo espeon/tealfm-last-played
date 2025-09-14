@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { resolveHandle, isValidHandle } from "@/lib/atproto";
 import { useAtprotoRecords } from "@/hooks/useAtprotoRecords";
 import { TealFMFullscreen } from "@/components/fullscreen";
@@ -29,18 +29,22 @@ function App() {
     "fm.teal.alpha.feed.play",
   );
 
-  const handleResolve = async () => {
-    if (!handle.trim()) return;
+  const handleResolve = useCallback(async (handleToResolve: string) => {
+    if (!handleToResolve.trim()) {
+      setResolved(null);
+      setError(null);
+      return;
+    }
 
     setResolving(true);
     setError(null);
 
     try {
-      if (!isValidHandle(handle)) {
+      if (!isValidHandle(handleToResolve)) {
         throw new Error("Invalid handle format");
       }
 
-      const resolution = await resolveHandle(handle);
+      const resolution = await resolveHandle(handleToResolve);
       setResolved(resolution);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to resolve handle");
@@ -48,6 +52,19 @@ function App() {
     } finally {
       setResolving(false);
     }
+  }, []);
+
+  // Debounced auto-resolve effect
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      handleResolve(handle);
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [handle, handleResolve]);
+
+  const handleManualResolve = () => {
+    handleResolve(handle);
   };
 
   const handleGoFullscreen = () => {
@@ -115,7 +132,11 @@ function App() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  handleGoFullscreen();
+                  if (!resolving && !resolved) {
+                    handleManualResolve();
+                  } else if (resolved) {
+                    handleGoFullscreen();
+                  }
                 }
               }}
             />
