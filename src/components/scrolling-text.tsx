@@ -93,7 +93,7 @@ export function ScrollingText({
             animationIterationCount: "infinite",
             // the 0.5rem here is based off half the padding in the span below
             // (padding of value 4 is 1rem)
-            "--text-width": `calc(${textWidth}px + (32px/2))`,
+            "--text-width": `calc(${textWidth}px + (38px/2))`,
           } as CSSProperties
         }
       >
