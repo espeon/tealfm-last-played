@@ -105,7 +105,7 @@ function App() {
           </h1>
           <p className="text-lg text-gray-700 dark:text-gray-300 mb-6">
             if you have teal.fm records, you can see your last played track in
-            an embed.
+            an embed or whatever
           </p>
         </div>
 
